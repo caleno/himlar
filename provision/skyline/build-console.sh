@@ -26,6 +26,7 @@ REPO_REF=${REPO_REF:-master}
 HIMLAR_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 PATCH_FILE="${HIMLAR_DIR}/provision/skyline/nrec-console.patch"
 LOGO_DIR="${HIMLAR_DIR}/profile/files/openstack/horizon/img"
+SKYLINE_FILES="${HIMLAR_DIR}/profile/files/openstack/skyline"
 
 if [ ! -f "${PATCH_FILE}" ]; then
   echo "Could not find ${PATCH_FILE}"
@@ -68,6 +69,12 @@ cp "${LOGO_DIR}/uio_emb.png"      src/asset/image/nrec-partner-uio.png
 cp "${LOGO_DIR}/uib_emb.png"      src/asset/image/nrec-partner-uib.png
 cp "${LOGO_DIR}/logo_neic.png"    src/asset/image/nrec-partner-neic.png
 cp "${LOGO_DIR}/logo_naic.svg"    src/asset/image/nrec-partner-naic.svg
+
+# The big image on the right hand side of the login page. Copied to .jpg, not
+# .jpeg: webpack only matches /\.(png|gif|jpg)$/ and a .jpeg import fails to
+# build. It stays a jpeg, only the extension changes - re-encoding it as png
+# would multiply the size of a photo for no gain.
+cp "${SKYLINE_FILES}/skyline-full-front.jpeg" src/asset/image/nrec-login-full.jpg
 
 echo "== building wheel"
 # pbr takes the version from git. Our changes live in the working tree and are

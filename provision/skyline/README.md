@@ -176,10 +176,13 @@ at them:
 | `nrec-logo.svg` | `logo.svg` | login page, above the form |
 | `nrec-logo-splash.svg` | `logo-splash.svg` | login page, right hand panel |
 | `nrec-partner-{uio,uib,neic,naic}.*` | `uio_emb.png`, `uib_emb.png`, `logo_neic.png`, `logo_naic.svg` | login page footer |
+| `nrec-login-full.jpg` | `openstack/skyline/skyline-full-front.jpeg` | login page, right hand image |
 | `favicon.ico` | `favicon.ico` | browser tab |
 
 `logo_neic.png` is NeIC, one of the partners - it is not the NREC logo and
-belongs only in the partner row. The login footer carries the same links and
+belongs only in the partner row. The front image is copied to `.jpg` rather
+than `.jpeg` because webpack only matches `/\.(png|gif|jpg)$/` and a `.jpeg`
+import fails the build; it is still a jpeg, only the extension differs. The login footer carries the same links and
 the same four partner logos, at the same heights, as horizon's
 `_login_form_footer.html`.
 
