@@ -227,6 +227,65 @@ tail -f /var/log/skyline/skyline*.log
 /opt/skyline/bin/pip list | grep skyline
 ```
 
+## Feide/dataporten
+
+The dataporten setup itself is unchanged: same registered application, same
+keystone redirect URI, same identity provider, mapping and protocol. Skyline
+does not need an application of its own, because the OIDC redirect goes to
+keystone, not to the dashboard. See `provision/dataporten/` and the vagrant
+howto in the iaas docs.
+
+Four things are skyline specific:
+
+1. **The callback url** must be trusted by keystone. Skyline builds it as
+   `https://<host>/api/openstack/skyline/api/v1/websso`, where horizon uses
+   `/dashboard/auth/websso/`. Both are already listed in
+   `keystone::federation::trusted_dashboards`, and because the entries are
+   built from `public__address__skyline` they resolve per location - in
+   vagrant that is `skyline.iaas.intern`, so there is nothing to add.
+2. **`sso_protocols`** must name the federation protocol *registered in
+   keystone*, which is not necessarily the auth method name. Check with
+   `openstack federation protocol list --identity-provider dataporten`.
+   `provision/dataporten/setup.sh` registers `oidc`; production uses
+   `openid`. Skyline redirects straight to
+   `<keystone>/auth/OS-FEDERATION/websso/<protocol>`, so a wrong name is a
+   404 rather than a fallback to something sensible.
+3. **`sso_enabled`** is false in the vagrant hieradata so local keystone
+   logins keep working. Flip it (and `sso_protocols`) when testing dataporten.
+4. **The browser needs to resolve the skyline host**, same as the howto's
+   `/etc/hosts` entries for the horizon and access nodes.
+
+### The roles a federated user ends up with
+
+`provision/dataporten/setup.sh` maps federated users into the `demo` group and
+gives that group a single role:
+
+```
+openstack role add --group demo --group-domain dataporten \
+  --project demo --project-domain dataporten user
+```
+
+Skyline's bundled policies are the new-style ones and check `role:member` and
+`role:reader`, so a user holding only `user` can create things but cannot list
+them - the list pages refuse to call the api and show "You don't have access
+to get instances". Horizon does not behave that way because our services still
+run the old policy defaults, where the same rules are a project id match with
+no role requirement.
+
+So a federated login will look like it works until you open Instances or
+Volumes. Either give the group `member` and `reader` as well, or override the
+role checks in the policy files. The same question applies to production,
+where the roles come from himlarcli rather than this script.
+
+### Worth re-checking while testing
+
+`setup.sh` registers the identity provider with remote id
+`https://auth.feideconnect.no`, which is the old dataporten hostname, while
+`keystone::federation::openidc::openidc_provider_metadata_url` points at
+`auth.dataporten.no`. The remote id has to match the `iss` dataporten
+actually sends (`remote_id_attribute` is `OIDC-iss`), so this is worth
+verifying rather than assuming.
+
 ## Adding a skyline node
 
 1. Give it a name that resolves to the `skyline` role, e.g. `bgo-skyline-01`

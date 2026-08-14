@@ -126,6 +126,13 @@ profile::openstack::skyline::config:
 
     # Feide/dataporten. Keystone must trust the callback url, see
     # keystone::federation::trusted_dashboards in modules/keystone.yaml.
+    #
+    # sso_protocols has to name the federation protocol registered in
+    # keystone ("openstack federation protocol list --identity-provider
+    # dataporten"), not the auth methods in keystone::federation::openidc.
+    # Skyline sends the user to <keystone>/auth/OS-FEDERATION/websso/<protocol>
+    # directly, so a wrong name is a 404 rather than a fallback. Horizon
+    # reaches the same place via websso_idp_mapping.
     sso_enabled:   true
     sso_region:    "%{::location}"
     sso_protocols:
