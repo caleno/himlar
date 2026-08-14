@@ -36,5 +36,15 @@ profile::openstack::skyline::config:
     # Self signed CA in vagrant
     cafile: '/etc/pki/tls/certs/cachain.pem'
   openstack:
-    # No dataporten in vagrant, log in with a local keystone user
+    # Log in with a local keystone user by default. To test dataporten,
+    # follow provision/dataporten (and the iaas howto), then flip this to
+    # true and set sso_protocols to whatever
+    #   openstack federation protocol list --identity-provider dataporten
+    # reports. provision/dataporten/setup.sh registers it as "oidc" while
+    # production uses "openid" - skyline builds
+    #   <keystone>/auth/OS-FEDERATION/websso/<protocol>
+    # so the wrong name is a 404, not a fallback.
     sso_enabled: false
+    # sso_enabled: true
+    # sso_protocols:
+    #   - 'oidc'
