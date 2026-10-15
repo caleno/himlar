@@ -36,6 +36,7 @@ profile::openstack::skyline::config:
     # Self signed CA in vagrant
     cafile: '/etc/pki/tls/certs/cachain.pem'
   openstack:
+<<<<<<< Updated upstream
     # Log in with a local keystone user by default. To test dataporten,
     # follow provision/dataporten (and the iaas howto), then flip this to
     # true and set sso_protocols to whatever
@@ -48,3 +49,7 @@ profile::openstack::skyline::config:
     # sso_enabled: true
     # sso_protocols:
     #   - 'oidc'
+=======
+    # No dataporten in vagrant, log in with a local keystone user
+    sso_enabled: true
+>>>>>>> Stashed changes
