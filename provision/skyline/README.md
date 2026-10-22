@@ -347,17 +347,44 @@ openstack role add --group demo --group-domain dataporten \
   --project demo --project-domain dataporten user
 ```
 
-Skyline's bundled policies are the new-style ones and check `role:member` and
-`role:reader`, so a user holding only `user` can create things but cannot list
-them - the list pages refuse to call the api and show "You don't have access
-to get instances". Horizon does not behave that way because our services still
-run the old policy defaults, where the same rules are a project id match with
-no role requirement.
+Skyline's bundled policies are the new-style ones, which check `role:reader`
+to list and `role:member` to change. Our `user` role satisfies neither.
+Horizon does not care because our services still run the old policy defaults,
+where the same rules are a project id match with no role requirement - so the
+same account works in horizon and comes up crippled in skyline.
 
-So a federated login will look like it works until you open Instances or
-Volumes. Either give the group `member` and `reader` as well, or override the
-role checks in the policy files. The same question applies to production,
-where the roles come from himlarcli rather than this script.
+**Confirmed in vagrant**: with `user` alone, Instances and Images answer
+
+```json
+{ "message": "You don't have access to get instances.", "status": 403 }
+```
+
+and granting `reader` fixes it. That 403 never reaches nova or glance - the
+console makes it up in `getDataWithPolicy` before calling anything - so it
+looks like an auth failure while being purely a policy decision. Adding
+`reader` restores listing; `member` (or the legacy `_member_`) is what
+restores creating.
+
+Role changes take effect on open sessions **immediately**, with no logout: we
+run `keystone::token_provider: 'fernet'`, and a fernet token stores only a
+minimal payload, so keystone re-derives the role list from current
+assignments every time it validates one.
+
+So a federated login looks fine until you open Instances or Volumes. For
+testing, grant the group the roles it lacks:
+
+```
+openstack role add --group demo --group-domain dataporten \
+  --project demo --project-domain dataporten reader
+```
+
+For production the choice is still open: give whatever group himlarcli puts
+federated users in `reader` and `member` alongside `user`, or override the
+role checks in our policy files. The first is smaller and is where upstream
+is heading (`member`/`reader` are the standard project roles); the second
+keeps keystone untouched but means carrying ~160 rule overrides, since
+neutron, glance and designate inline the role check in each rule rather than
+in a shared base rule.
 
 ### Worth re-checking while testing
 
