@@ -92,6 +92,83 @@ it would fight puppet over the file. Instead the same config is rendered from
 added to the catalog it has to be added there **and** to `service_mapping` in
 `hieradata/common/modules/skyline.yaml`.
 
+### The system user
+
+Skyline needs a keystone account of its own, separate from whoever is logged
+in. The api server authenticates with it to
+
+* read the service catalog, to tell the browser where each api lives
+  (`get_endpoints`, `get_regions`)
+* list the neutron extensions, which is how the network menu decides what to
+  show (`nc.list_extensions`)
+* list the projects a user may scope to, and the domains
+  (`kc.projects.list(user=...)`, `kc.domains.list`)
+* exchange a websso or password token for a project scoped one
+  (`get_project_scope_token`)
+
+Those are administrative reads across identity and neutron, so it gets
+`admin` in the service project - the same thing the upstream install guide
+does with `openstack role add --project service --user skyline admin`.
+
+Puppet creates it on the identity node through
+`profile::openstack::resource::users`
+(`hieradata/common/roles/identity.yaml`):
+
+```yaml
+profile::openstack::resource::users::users:
+  skyline:
+    enabled:  true
+    email:    'skyline@localhost'
+    password: "%{hiera('skyline_api_password')}"
+    domain:   "%{hiera('keystone__default__domain')}"
+
+profile::openstack::resource::users::user_roles:
+  "skyline@%{hiera('keystone__service__project')}":
+    roles:    'admin'
+```
+
+`keystone_user` and `keystone_user_role` are idempotent, so the first puppet
+run on the identity node creates the account and every later run is a no-op.
+Nothing is created by hand and nothing needs re-running; if the secret
+changes, the next run resets the password to match.
+
+The same secret feeds the api server, so the two cannot drift:
+
+| key in `modules/skyline.yaml` | value |
+| --- | --- |
+| `system_user_name` | `skyline` |
+| `system_user_password` | `%{hiera('skyline_api_password')}` |
+| `system_project` | `keystone__service__project`, ie. `services` |
+| `system_project_domain`, `system_user_domain` | `keystone__default__domain`, ie. `Default` |
+
+Note our service project is `services`; upstream's default is `service`.
+
+**Production** - add `skyline_api_password` to the secrets repo *before*
+running puppet on the identity node. Nothing invents it for you, and with an
+empty password the api server starts but every login fails on the token
+exchange.
+
+**Vagrant and local\*** - a development value is already in
+`hieradata/<env>/common.yaml` (`skyline_api_password: 'skyline_pass'`), so the
+account comes up with the rest of the environment and there is nothing to do.
+Use a throwaway password there, never the production one. To create or
+recreate it by hand while testing, on the identity node:
+
+```
+source ~/openrc
+openstack --insecure user create --or-show --domain Default \
+  --password skyline_pass skyline
+openstack --insecure role add --project services --user skyline admin
+```
+
+And to check the credentials the api server will use actually work:
+
+```
+openstack --insecure --os-username skyline --os-password skyline_pass \
+  --os-project-name services --os-user-domain-name Default \
+  --os-project-domain-name Default token issue
+```
+
 ## Mimicking the Horizon setup
 
 Horizon's user facing behaviour comes from three places, and each one has an
@@ -252,6 +329,11 @@ Four things are skyline specific:
    404 rather than a fallback to something sensible.
 3. **`sso_enabled`** is false in the vagrant hieradata so local keystone
    logins keep working. Flip it (and `sso_protocols`) when testing dataporten.
+   Newer api servers than the 8.0.0 we pin also have `sso_identity_providers`,
+   which takes a `name`/`protocol`/`label` per provider and is a closer match
+   for horizon's `websso_choices` + `websso_idp_mapping` (a labelled "Feide"
+   button rather than a generic protocol one). It does not exist in 8.0.0, so
+   `sso_protocols` is the only lever until the apiserver moves.
 4. **The browser needs to resolve the skyline host**, same as the howto's
    `/etc/hosts` entries for the horizon and access nodes.
 
@@ -309,11 +391,3 @@ skyline_secret_key:     # signing key for the session cookie, keep it secret
 
 The vagrant/local hieradata has development values for these.
 
-## WebSSO (Feide)
-
-Skyline builds its callback url as
-`https://<host>/api/openstack/skyline/api/v1/websso`, and keystone will only
-redirect to a url it trusts, so the three public skyline addresses are listed
-in `keystone::federation::trusted_dashboards`
-(`hieradata/common/modules/keystone.yaml`). The protocol name (`openid`) has
-to match `keystone::federation::openidc::methods`.
