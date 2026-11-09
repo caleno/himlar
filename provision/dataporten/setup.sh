@@ -23,13 +23,17 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # Give demo group access to demo project
-# check (if output is a blank line grep will exit with 1)
-openstack role assignment list --group demo --group-domain "${domain}" | grep -v ^$
-# create
-if [[ $? -ne 0 ]]; then
-  openstack role create user
-  openstack role add --group demo --group-domain "${domain}" --project demo --project-domain "${domain}" user
-fi
+#
+# "user" is our own role, "member" and "reader" are the standard RBAC ones.
+# New-style service policies, and the ones skyline ships, check role:member to
+# change and role:reader to list, so a group holding only "user" can log in to
+# skyline and then see nothing. Granting a role is an idempotent PUT in
+# keystone, so these run unconditionally and fix up existing environments too.
+for role in user member reader; do
+  openstack role create --or-show "${role}"
+  openstack role add --group demo --group-domain "${domain}" \
+    --project demo --project-domain "${domain}" "${role}"
+done
 
 # Create idp
 # check

@@ -56,6 +56,13 @@ profile::openstack::identity::roles_extra:
   - admin_view
   - object
   - imagebuilder
+  # Standard RBAC project roles. Keystone's own bootstrap would create these,
+  # but we run with keystone::bootstrap::bootstrap false, so we make them
+  # ourselves. New-style service policies (and skyline's bundled ones) check
+  # role:member to change and role:reader to list; our 'user' role satisfies
+  # neither. Assignments are made where the users are made, not here.
+  - member
+  - reader
 
 profile::openstack::identity::keystone_config:
   'DEFAULT/max_project_tree_depth':

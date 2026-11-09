@@ -16,8 +16,15 @@ openstack --insecure user create --or-show --password "$os_demo_password" $os_de
 # Associate the demo user with the demo project
 openstack --insecure user set --project $os_demo_project_name $os_demo_username
 
-# Create proper role for demo user
-openstack --insecure role add --user $os_demo_username --project $os_demo_project_name user
+# Create proper roles for demo user
+#
+# "user" is our own role; "member" and "reader" are the standard RBAC ones that
+# new-style policies check (role:member to change, role:reader to list). Skyline
+# needs them: with "user" alone its list pages refuse to call the api at all.
+for role in user member reader; do
+  openstack --insecure role create --or-show $role
+  openstack --insecure role add --user $os_demo_username --project $os_demo_project_name $role
+done
 
 # Show the demo user
 openstack --insecure user show $os_demo_username

@@ -378,13 +378,50 @@ openstack role add --group demo --group-domain dataporten \
   --project demo --project-domain dataporten reader
 ```
 
-For production the choice is still open: give whatever group himlarcli puts
-federated users in `reader` and `member` alongside `user`, or override the
-role checks in our policy files. The first is smaller and is where upstream
-is heading (`member`/`reader` are the standard project roles); the second
-keeps keystone untouched but means carrying ~160 rule overrides, since
-neutron, glance and designate inline the role check in each rule rather than
-in a shared base rule.
+### We use RBAC, not policy overrides
+
+The decision is to grant the standard roles rather than rewrite the rules.
+The alternative - overriding the role checks in our own policy files - was
+rejected: nova and cinder would be two base rules each, but neutron, glance
+and designate inline the check in every rule, so it means carrying ~160
+overrides and re-auditing them on every skyline upgrade. `member` and
+`reader` are the standard project roles and where upstream is heading
+anyway.
+
+What that means in practice:
+
+| role | who has it | what it is for |
+| --- | --- | --- |
+| `user` | our own, granted today | our existing policies and horizon's `keystone_default_role` |
+| `member` | add | new-style rules that change things (create, delete, update) |
+| `reader` | add | new-style rules that list things |
+| `admin` | service accounts, operators | unchanged; skyline's `system_admin_roles` |
+| `admin_view` | operators | unchanged; skyline's `system_reader_roles`, ie. read-only admin console |
+
+`user` stays: horizon, our policy files and himlarcli all reference it, and
+retiring it is a separate migration.
+
+Done in himlar:
+
+* `profile::openstack::identity::roles_extra` creates `member` and `reader`.
+  Keystone's own bootstrap would have, but we run with
+  `keystone::bootstrap::bootstrap: false`, so nothing did - they very likely
+  do not exist in keystone yet.
+* `provision/dataporten/setup.sh` grants all three to the federated `demo`
+  group. Granting is an idempotent PUT, so it also fixes an environment that
+  already has the `user` assignment.
+* `tests/01-demo-create-user-and-project.sh` grants all three to the local
+  `demo` user.
+
+**Still to do, outside himlar**: himlarcli assigns the roles for real
+federated users, so the group a Feide login lands in needs `member` and
+`reader` there too. Until that happens, production skyline logins will list
+nothing, exactly as vagrant did before.
+
+Worth knowing for later: our services still run `enforce_new_defaults: false`,
+and skyline's config mirrors that. Granting `member`/`reader` is the
+prerequisite for flipping both to the new defaults; the roles can be granted
+long before that, and are harmless until then.
 
 ### Worth re-checking while testing
 
